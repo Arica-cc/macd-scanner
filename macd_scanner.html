@@ -523,15 +523,26 @@ async function fetchBinance(sym,interval,limit=220){
 // BingX TradFi — 美股/指数/贵金属，symbol 格式: AMD-USDT
 async function fetchBingX(sym,interval,limit=220){
   const apiUrl=`https://open-api.bingx.com/openApi/swap/v2/quote/klines?symbol=${sym.toUpperCase()}&interval=${interval}&limit=${limit}`;
-  const url=`https://corsproxy.io/?`+encodeURIComponent(apiUrl);
-  const res=await fetch(url,{signal:AbortSignal.timeout(10000)});
-  if(!res.ok)throw new Error(`BingX HTTP ${res.status}`);
-  const d=await res.json();
-  if(d.code!==0)throw new Error(d.msg||'BingX API 错误');
-  if(!d.data||!d.data.length)throw new Error('BingX 返回空数据');
-  return d.data.map(k=>({
-    open:+k.open,high:+k.high,low:+k.low,close:+k.close,volume:+k.volume
-  }));
+  // 依次尝试多个 CORS 代理
+  const proxies=[
+    `https://api.allorigins.win/raw?url=`+encodeURIComponent(apiUrl),
+    `https://corsproxy.io/?`+encodeURIComponent(apiUrl),
+    `https://thingproxy.freeboard.io/fetch/`+apiUrl,
+  ];
+  let lastErr=new Error('所有代理失败');
+  for(const url of proxies){
+    try{
+      const res=await fetch(url,{signal:AbortSignal.timeout(12000)});
+      if(!res.ok){lastErr=new Error(`BingX HTTP ${res.status}`);continue;}
+      const d=await res.json();
+      if(d.code!==0){lastErr=new Error(d.msg||'BingX API 错误');continue;}
+      if(!d.data||!d.data.length){lastErr=new Error('BingX 返回空数据');continue;}
+      return d.data.map(k=>({
+        open:+k.open,high:+k.high,low:+k.low,close:+k.close,volume:+k.volume
+      }));
+    }catch(e){lastErr=e;}
+  }
+  throw lastErr;
 }
 
 // ═══════════════════════════════
