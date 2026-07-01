@@ -128,11 +128,7 @@ input[type=text]:focus{border-color:var(--blue);}
 <div class="hd">
   <div class="logo">📊 波段侦测<sub>MACD(10,20,4) · Stoch(5,3,3) · RVI(6)</sub></div>
   <div class="ctrls">
-    <div class="seg">
-      <button class="on" id="bCrypto" onclick="setType('crypto')">加密货币</button>
-      <button id="bStock" onclick="setType('stock')">股票</button>
-    </div>
-    <input type="text" id="sym" value="BTCUSDT" placeholder="标的代码…" onkeydown="if(event.key==='Enter')run()">
+    <input type="text" id="sym" value="BTCUSDT" placeholder="代码… BTCUSDT 或 AMD-USDT" onkeydown="if(event.key==='Enter')run()">
     <button class="btn" id="runBtn" onclick="run()">▶ 分析</button>
     <button class="btn" id="autoBtn" onclick="toggleAuto()" style="background:var(--border);color:var(--muted)">⟳ 自动刷新</button>
     <span id="cdText" style="font-size:11px;color:var(--muted);min-width:40px;text-align:center;display:none"></span>
@@ -141,23 +137,38 @@ input[type=text]:focus{border-color:var(--blue);}
 
 <div class="presets">
   <div class="preset-grp">
-    <span class="preset-grp-lbl">贵金属（Binance）</span>
-    <button class="ps gold" onclick="pickPreset('PAXGUSDT','crypto')" title="PAX Gold — 价格锚定实物黄金 XAUUSD">🥇 黄金 PAXG</button>
+    <span class="preset-grp-lbl">加密货币 · Binance</span>
+    <button class="ps crypto" onclick="pickPreset('BTCUSDT')">BTC</button>
+    <button class="ps crypto" onclick="pickPreset('ETHUSDT')">ETH</button>
+    <button class="ps crypto" onclick="pickPreset('SOLUSDT')">SOL</button>
+    <button class="ps crypto" onclick="pickPreset('BNBUSDT')">BNB</button>
+    <button class="ps crypto" onclick="pickPreset('TAOUSDT')">TAO</button>
   </div>
   <div class="divider"></div>
   <div class="preset-grp">
-    <span class="preset-grp-lbl">加密货币</span>
-    <button class="ps crypto" onclick="pickPreset('BTCUSDT','crypto')">BTC</button>
-    <button class="ps crypto" onclick="pickPreset('ETHUSDT','crypto')">ETH</button>
-    <button class="ps crypto" onclick="pickPreset('SOLUSDT','crypto')">SOL</button>
-    <button class="ps crypto" onclick="pickPreset('BNBUSDT','crypto')">BNB</button>
+    <span class="preset-grp-lbl">韩股/科技 · Binance</span>
+    <button class="ps" onclick="pickPreset('SKHYNIXUSDT')">SK Hynix</button>
+    <button class="ps" onclick="pickPreset('SAMSUNGUSDT')">Samsung</button>
+    <button class="ps" onclick="pickPreset('SPCXUSDT')">SpaceX</button>
   </div>
   <div class="divider"></div>
   <div class="preset-grp">
-    <span class="preset-grp-lbl">股票</span>
-    <button class="ps" onclick="pickPreset('AAPL','stock')">AAPL</button>
-    <button class="ps" onclick="pickPreset('NVDA','stock')">NVDA</button>
-    <button class="ps" onclick="pickPreset('SPY','stock')">SPY</button>
+    <span class="preset-grp-lbl">美股 · BingX</span>
+    <button class="ps" onclick="pickPreset('AMD-USDT')">AMD</button>
+    <button class="ps" onclick="pickPreset('MU-USDT')">MU</button>
+    <button class="ps" onclick="pickPreset('PLTR-USDT')">PLTR</button>
+  </div>
+  <div class="divider"></div>
+  <div class="preset-grp">
+    <span class="preset-grp-lbl">指数 · BingX</span>
+    <button class="ps" onclick="pickPreset('SP500-USDT')">S&P500</button>
+    <button class="ps" onclick="pickPreset('NDX-USDT')">Nasdaq</button>
+  </div>
+  <div class="divider"></div>
+  <div class="preset-grp">
+    <span class="preset-grp-lbl">贵金属 · BingX</span>
+    <button class="ps gold" onclick="pickPreset('GOLD-USDT')">🥇 黄金 XAUUSD</button>
+    <button class="ps silver" onclick="pickPreset('SILVER-USDT')">🥈 白银 XAGUSD</button>
   </div>
 </div>
 
@@ -167,9 +178,9 @@ input[type=text]:focus{border-color:var(--blue);}
     <div class="ph">
       <h2>输入标的，一键分析 5 个时间段</h2>
       <p>点击上方快捷键直接分析，或手动输入标的代码<br><br>
-         🥇 黄金：PAXGUSDT（Binance，价格锚定实物黄金）<br>
-         加密货币：BTCUSDT · ETHUSDT · SOLUSDT · BNBUSDT<br>
-         股票/ETF：AAPL · NVDA · SPY（需网络能访问 Yahoo Finance）<br><br>
+         🔵 Binance：加密货币 (BTCUSDT · ETHUSDT · TAOUSDT) · 韩股/SpaceX (SKHYNIXUSDT · SAMSUNGUSDT · SPCXUSDT)<br>
+         🟡 BingX TradFi：美股 (AMD-USDT · MU-USDT · PLTR-USDT) · 指数 (SP500-USDT · NDX-USDT) · 贵金属 (GOLD-USDT · SILVER-USDT)<br><br>
+         含 "-" 的代码自动走 BingX，其余走 Binance<br><br>
          指标：MACD(10,20,4·SMA) · Stoch(5,3,3) · RVI(6) · RSI(14) · EMA(9/21/50)</p>
     </div>
   </div>
@@ -179,7 +190,6 @@ input[type=text]:focus{border-color:var(--blue);}
 // ═══════════════════════════════
 //  全局
 // ═══════════════════════════════
-let assetType='crypto';
 const charts={};
 
 // 自动刷新
@@ -215,25 +225,14 @@ function startAutoRefresh(){
 }
 
 const TFS=[
-  {id:'5m', label:'5 分钟', binance:'5m', yahoo:'5m',  yRange:'5d'},
-  {id:'15m',label:'15 分钟',binance:'15m',yahoo:'15m', yRange:'5d'},
-  {id:'30m',label:'30 分钟',binance:'30m',yahoo:'30m', yRange:'1mo'},
-  {id:'1h', label:'1 小时', binance:'1h', yahoo:'60m', yRange:'3mo'},
-  {id:'4h', label:'4 小时', binance:'4h', yahoo:'1d',  yRange:'1y'},
+  {id:'5m', label:'5 分钟', binance:'5m', bingx:'5m'},
+  {id:'15m',label:'15 分钟',binance:'15m',bingx:'15m'},
+  {id:'30m',label:'30 分钟',binance:'30m',bingx:'30m'},
+  {id:'1h', label:'1 小时', binance:'1h', bingx:'1h'},
+  {id:'4h', label:'4 小时', binance:'4h', bingx:'4h'},
 ];
 
-function setType(t){
-  assetType=t;
-  document.getElementById('bCrypto').className=t==='crypto'?'on':'';
-  document.getElementById('bStock').className=t!=='crypto'?'on':'';
-  if(t==='crypto')document.getElementById('sym').value='BTCUSDT';
-  else document.getElementById('sym').value='AAPL';
-}
-
-function pickPreset(sym,type){
-  assetType=type;
-  document.getElementById('bCrypto').className=type==='crypto'?'on':'';
-  document.getElementById('bStock').className=type!=='crypto'?'on':'';
+function pickPreset(sym){
   document.getElementById('sym').value=sym;
   run();
 }
@@ -521,30 +520,17 @@ async function fetchBinance(sym,interval,limit=220){
 }
 
 
-async function fetchYahoo(sym,interval,range){
-  const target=`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}`;
-  // 尝试顺序：直连 → corsproxy.io → allorigins
-  const attempts=[
-    ()=>fetch(target,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(6000)}),
-    ()=>fetch(`https://corsproxy.io/?${encodeURIComponent(target)}`,{signal:AbortSignal.timeout(8000)}),
-    ()=>fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`,{signal:AbortSignal.timeout(8000)}),
-  ];
-  let lastErr;
-  for(const attempt of attempts){
-    try{
-      const res=await attempt();
-      if(!res.ok)throw new Error(`HTTP ${res.status}`);
-      const d=await res.json();
-      const r=d?.chart?.result?.[0];
-      if(!r)throw new Error('返回数据为空');
-      const q=r.indicators.quote[0];
-      return r.timestamp.map((_,i)=>({
-        open:q.open[i]||0,high:q.high[i]||0,low:q.low[i]||0,
-        close:q.close[i],volume:q.volume[i]||0
-      })).filter(c=>c.close!=null&&c.close>0);
-    }catch(e){lastErr=e;}
-  }
-  throw new Error(`Yahoo 数据获取失败（已尝试代理）：${lastErr?.message||''}`);
+// BingX TradFi — 美股/指数/贵金属，symbol 格式: AMD-USDT
+async function fetchBingX(sym,interval,limit=220){
+  const url=`https://open-api.bingx.com/openApi/swap/v2/quote/klines?symbol=${sym.toUpperCase()}&interval=${interval}&limit=${limit}`;
+  const res=await fetch(url,{signal:AbortSignal.timeout(10000)});
+  if(!res.ok)throw new Error(`BingX HTTP ${res.status}`);
+  const d=await res.json();
+  if(d.code!==0)throw new Error(d.msg||'BingX API 错误');
+  if(!d.data||!d.data.length)throw new Error('BingX 返回空数据');
+  return d.data.map(k=>({
+    open:+k.open,high:+k.high,low:+k.low,close:+k.close,volume:+k.volume
+  }));
 }
 
 // ═══════════════════════════════
@@ -714,7 +700,9 @@ async function run(){
   const btn=document.getElementById('runBtn');
   btn.disabled=true;btn.textContent='分析中…';
   document.getElementById('errArea').innerHTML='';
-  const srcLabel=assetType==='crypto'?'Binance':'Yahoo Finance(代理)';
+  // 含 "-" 自动走 BingX TradFi，否则走 Binance
+  const isBingX=sym.includes('-');
+  const srcLabel=isBingX?'BingX TradFi':'Binance';
   document.getElementById('content').innerHTML=`
     <div class="ld"><div class="spin"></div>
     <div style="color:var(--text)">拉取 ${sym.toUpperCase()} — 5 个时间段 OHLCV</div>
@@ -725,19 +713,19 @@ async function run(){
 
   const results={},errors=[];
 
-  if(assetType==='crypto'){
-    // 加密货币：Binance 5 个并行请求（无限制）
+  if(isBingX){
+    // BingX TradFi：美股/指数/贵金属
     await Promise.allSettled(TFS.map(async tf=>{
       try{
-        const c=await fetchBinance(sym,tf.binance);
+        const c=await fetchBingX(sym,tf.bingx);
         results[tf.id]=analyze(c);
       }catch(e){errors.push(`${tf.label}: ${e.message}`);results[tf.id]=null;}
     }));
   } else {
-    // 股票：Yahoo Finance + CORS 代理
+    // Binance：加密货币 + 韩股 + SpaceX
     await Promise.allSettled(TFS.map(async tf=>{
       try{
-        const c=await fetchYahoo(sym,tf.yahoo,tf.yRange);
+        const c=await fetchBinance(sym,tf.binance);
         results[tf.id]=analyze(c);
       }catch(e){errors.push(`${tf.label}: ${e.message}`);results[tf.id]=null;}
     }));
