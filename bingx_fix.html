@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多时间段波段侦测 — MACD · Stoch · RVI</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0d1117;--card:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;
+  --green:#3fb950;--green2:#7ee787;--red:#f85149;--red2:#ff9280;
+  --yellow:#d29922;--blue:#58a6ff;--purple:#bc8cff;--orange:#f0883e;--teal:#39d353;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;}
+
+/* ── Header ── */
+.hd{padding:12px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;
+  gap:12px;flex-wrap:wrap;background:var(--card);position:sticky;top:0;z-index:100;}
+.logo{font-size:15px;font-weight:700;color:var(--blue);white-space:nowrap;}
+.logo sub{color:var(--muted);font-size:10px;font-weight:400;margin-left:6px;}
+.ctrls{display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap;}
+.seg{display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;}
+.seg button{background:transparent;color:var(--muted);border:none;padding:6px 13px;cursor:pointer;font-size:12px;transition:.15s;}
+.seg button.on{background:var(--blue);color:#fff;}
+input[type=text]{background:var(--bg);border:1px solid var(--border);color:var(--text);
+  padding:6px 11px;border-radius:6px;font-size:13px;width:140px;outline:none;transition:border-color .15s;}
+input[type=text]:focus{border-color:var(--blue);}
+.btn{background:var(--blue);color:#fff;border:none;padding:6px 18px;border-radius:6px;
+  cursor:pointer;font-size:13px;font-weight:600;transition:opacity .15s;}
+.btn:hover{opacity:.85;} .btn:disabled{opacity:.4;cursor:not-allowed;}
+
+/* ── Presets bar ── */
+.presets{padding:8px 18px;border-bottom:1px solid var(--border);background:var(--card);
+  display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.preset-grp{display:flex;gap:4px;align-items:center;}
+.preset-grp-lbl{font-size:10px;color:var(--muted);margin-right:2px;white-space:nowrap;}
+.ps{background:transparent;border:1px solid var(--border);color:var(--muted);
+  padding:3px 10px;border-radius:12px;cursor:pointer;font-size:11px;transition:.15s;white-space:nowrap;}
+.ps:hover{border-color:var(--blue);color:var(--blue);}
+.ps.gold{border-color:rgba(210,153,34,.5);color:var(--yellow);}
+.ps.gold:hover{background:rgba(210,153,34,.15);}
+.ps.silver{border-color:rgba(139,148,158,.5);color:#c0c8d4;}
+.ps.silver:hover{background:rgba(139,148,158,.15);}
+.ps.crypto{border-color:rgba(88,166,255,.4);color:var(--blue);}
+.ps.crypto:hover{background:rgba(88,166,255,.1);}
+.divider{width:1px;height:16px;background:var(--border);margin:0 4px;}
+
+/* ── Wrap ── */
+.wrap{padding:16px 18px;max-width:1600px;margin:0 auto;}
+
+/* ── Summary ── */
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+.sc{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px 16px;}
+.sc .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:7px;}
+.sc .val{font-size:23px;font-weight:700;line-height:1.1;}
+.sc .sub{font-size:11px;color:var(--muted);margin-top:5px;}
+.dots{display:flex;gap:5px;margin-top:7px;}
+.dot{height:8px;border-radius:4px;flex:1;background:var(--border);}
+.dot.bull{background:var(--green);} .dot.bear{background:var(--red);}
+.badge{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:600;}
+.b-trend{background:rgba(88,166,255,.15);color:var(--blue);}
+.b-cons{background:rgba(210,153,34,.15);color:var(--yellow);}
+.b-osc{background:rgba(188,140,255,.15);color:var(--purple);}
+.b-rev{background:rgba(248,81,73,.15);color:var(--red);}
+.c-sbuy{color:var(--green);} .c-buy{color:var(--green2);} .c-neu{color:var(--yellow);}
+.c-sell{color:var(--red2);} .c-ssell{color:var(--red);}
+
+/* ── TF grid ── */
+.tf-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+.tfc{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:border-color .2s;}
+.tfc.bull-c{border-color:rgba(63,185,80,.35);} .tfc.bear-c{border-color:rgba(248,81,73,.35);}
+
+.tfhd{padding:10px 13px 5px;display:flex;justify-content:space-between;align-items:center;}
+.tflbl{font-size:13px;font-weight:700;}
+.domstar{color:var(--orange);font-size:10px;margin-left:3px;}
+
+.chip{font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;white-space:nowrap;}
+.gc{background:rgba(63,185,80,.35);color:var(--green2);}
+.dc{background:rgba(248,81,73,.35);color:var(--red2);}
+.bm{background:rgba(63,185,80,.2);color:var(--green);}
+.bl{background:rgba(63,185,80,.12);color:var(--green);}
+.sm{background:rgba(248,81,73,.2);color:var(--red);}
+.br{background:rgba(248,81,73,.12);color:var(--red);}
+.nu{background:rgba(139,148,158,.15);color:var(--muted);}
+
+.div-alert{margin:0 13px 5px;padding:4px 9px;border-radius:6px;font-size:10px;}
+.da-bear{background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.3);}
+.da-bull{background:rgba(63,185,80,.1);color:var(--green);border:1px solid rgba(63,185,80,.3);}
+
+.chart-wrap{padding:0 5px;height:80px;}
+
+/* Metrics 2x4 */
+.mets{padding:6px 13px 11px;display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;}
+.met{display:flex;justify-content:space-between;align-items:center;font-size:10px;}
+.mk{color:var(--muted);}
+.mv{font-weight:600;font-size:10px;}
+
+/* Confirmation bar */
+.conf-bar{display:flex;gap:2px;}
+.conf-dot{width:14px;height:6px;border-radius:3px;background:var(--border);}
+.conf-dot.on{background:var(--teal);}
+
+/* Loading / placeholder */
+.ph{text-align:center;padding:70px 20px;color:var(--muted);}
+.ph h2{font-size:17px;color:var(--text);margin-bottom:8px;}
+.ph p{font-size:12px;line-height:1.7;}
+.ld{text-align:center;padding:50px 20px;}
+.spin{display:inline-block;width:34px;height:34px;border:3px solid var(--border);
+  border-top-color:var(--blue);border-radius:50%;animation:sp .8s linear infinite;margin-bottom:12px;}
+@keyframes sp{to{transform:rotate(360deg);}}
+.ld p{color:var(--muted);font-size:12px;margin-top:5px;}
+.errbox{background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red);
+  padding:9px 14px;border-radius:8px;margin-bottom:12px;font-size:12px;}
+.warnbox{background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);color:var(--yellow);
+  padding:7px 13px;border-radius:8px;margin-bottom:10px;font-size:11px;}
+
+/* param strip */
+.pstrip{font-size:10px;color:var(--muted);padding:0 13px 8px;letter-spacing:.2px;}
+
+@media(max-width:1200px){.tf-grid{grid-template-columns:repeat(3,1fr);}.summary{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:700px){.tf-grid{grid-template-columns:repeat(2,1fr);}.summary{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:480px){.tf-grid{grid-template-columns:1fr;}.summary{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <div class="logo">📊 波段侦测<sub>MACD(10,20,4) · Stoch(5,3,3) · RVI(6)</sub></div>
+  <div class="ctrls">
+    <input type="text" id="sym" value="BTCUSDT" placeholder="代码… BTCUSDT 或 AMD-USDT" onkeydown="if(event.key==='Enter')run()">
+    <button class="btn" id="runBtn" onclick="run()">▶ 分析</button>
+    <button class="btn" id="autoBtn" onclick="toggleAuto()" style="background:var(--border);color:var(--muted)">⟳ 自动刷新</button>
+    <span id="cdText" style="font-size:11px;color:var(--muted);min-width:40px;text-align:center;display:none"></span>
+  </div>
+</div>
+
+<div class="presets">
+  <div class="preset-grp">
+    <span class="preset-grp-lbl">加密货币 · Binance</span>
+    <button class="ps crypto" onclick="pickPreset('BTCUSDT')">BTC</button>
+    <button class="ps crypto" onclick="pickPreset('ETHUSDT')">ETH</button>
+    <button class="ps crypto" onclick="pickPreset('SOLUSDT')">SOL</button>
+    <button class="ps crypto" onclick="pickPreset('BNBUSDT')">BNB</button>
+    <button class="ps crypto" onclick="pickPreset('TAOUSDT')">TAO</button>
+  </div>
+  <div class="divider"></div>
+  <div class="preset-grp">
+    <span class="preset-grp-lbl">韩股/科技 · Binance</span>
+    <button class="ps" onclick="pickPreset('SKHYNIXUSDT')">SK Hynix</button>
+    <button class="ps" onclick="pickPreset('SAMSUNGUSDT')">Samsung</button>
+    <button class="ps" onclick="pickPreset('SPCXUSDT')">SpaceX</button>
+  </div>
+  <div class="divider"></div>
+  <div class="preset-grp">
+    <span class="preset-grp-lbl">美股 · BingX</span>
+    <button class="ps" onclick="pickPreset('AMD-USDT')">AMD</button>
+    <button class="ps" onclick="pickPreset('MU-USDT')">MU</button>
+    <button class="ps" onclick="pickPreset('PLTR-USDT')">PLTR</button>
+  </div>
+  <div class="divider"></div>
+  <div class="preset-grp">
+    <span class="preset-grp-lbl">指数 · BingX</span>
+    <button class="ps" onclick="pickPreset('SP500-USDT')">S&P500</button>
+    <button class="ps" onclick="pickPreset('NDX-USDT')">Nasdaq</button>
+  </div>
+  <div class="divider"></div>
+  <div class="preset-grp">
+    <span class="preset-grp-lbl">贵金属 · BingX</span>
+    <button class="ps gold" onclick="pickPreset('GOLD-USDT')">🥇 黄金 XAUUSD</button>
+    <button class="ps silver" onclick="pickPreset('SILVER-USDT')">🥈 白银 XAGUSD</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div id="errArea"></div>
+  <div id="content">
+    <div class="ph">
+      <h2>输入标的，一键分析 5 个时间段</h2>
+      <p>点击上方快捷键直接分析，或手动输入标的代码<br><br>
+         🔵 Binance：加密货币 (BTCUSDT · ETHUSDT · TAOUSDT) · 韩股/SpaceX (SKHYNIXUSDT · SAMSUNGUSDT · SPCXUSDT)<br>
+         🟡 BingX TradFi：美股 (AMD-USDT · MU-USDT · PLTR-USDT) · 指数 (SP500-USDT · NDX-USDT) · 贵金属 (GOLD-USDT · SILVER-USDT)<br><br>
+         含 "-" 的代码自动走 BingX，其余走 Binance<br><br>
+         指标：MACD(10,20,4·SMA) · Stoch(5,3,3) · RVI(6) · RSI(14) · EMA(9/21/50)</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════
+//  全局
+// ═══════════════════════════════
+const charts={};
+
+// 自动刷新
+let autoTimer=null, cdTimer=null, cdSec=0;
+const AUTO_INTERVAL=30;
+
+function toggleAuto(){
+  if(autoTimer){
+    clearInterval(autoTimer);clearInterval(cdTimer);
+    autoTimer=null;cdTimer=null;
+    const btn=document.getElementById('autoBtn');
+    btn.style.background='var(--border)';btn.style.color='var(--muted)';btn.textContent='⟳ 自动刷新';
+    document.getElementById('cdText').style.display='none';
+  } else {
+    run(); // 立即执行一次
+    startAutoRefresh();
+  }
+}
+
+function startAutoRefresh(){
+  const btn=document.getElementById('autoBtn');
+  btn.style.background='rgba(63,185,80,.25)';btn.style.color='var(--green)';btn.textContent='⟳ 开启中';
+  cdSec=AUTO_INTERVAL;
+  const cdEl=document.getElementById('cdText');
+  cdEl.style.display='inline';
+  cdEl.textContent=`${cdSec}s`;
+  cdTimer=setInterval(()=>{
+    cdSec--;
+    cdEl.textContent=`${cdSec}s`;
+    if(cdSec<=0)cdSec=AUTO_INTERVAL;
+  },1000);
+  autoTimer=setInterval(()=>{run();},AUTO_INTERVAL*1000);
+}
+
+const TFS=[
+  {id:'5m', label:'5 分钟', binance:'5m', bingx:'5m'},
+  {id:'15m',label:'15 分钟',binance:'15m',bingx:'15m'},
+  {id:'30m',label:'30 分钟',binance:'30m',bingx:'30m'},
+  {id:'1h', label:'1 小时', binance:'1h', bingx:'1h'},
+  {id:'4h', label:'4 小时', binance:'4h', bingx:'4h'},
+];
+
+function pickPreset(sym){
+  document.getElementById('sym').value=sym;
+  run();
+}
+
+// ═══════════════════════════════
+//  数学基础
+// ═══════════════════════════════
+function ema(arr,n){
+  if(!arr.length)return[];
+  const k=2/(n+1),r=[arr[0]];
+  for(let i=1;i<arr.length;i++) r.push(arr[i]*k+r[i-1]*(1-k));
+  return r;
+}
+
+// SMA (dense array, returns array same length as input with null prefix)
+function sma(arr,n){
+  const r=Array(n-1).fill(null);
+  for(let i=n-1;i<arr.length;i++) r.push(arr.slice(i-n+1,i+1).reduce((a,b)=>a+b,0)/n);
+  return r;
+}
+
+// SMA on sparse array (nulls propagate)
+function smaSparse(arr,n){
+  const r=[];
+  for(let i=0;i<arr.length;i++){
+    if(i<n-1){r.push(null);continue;}
+    const sl=arr.slice(i-n+1,i+1);
+    r.push(sl.some(v=>v===null)?null:sl.reduce((a,b)=>a+b,0)/n);
+  }
+  return r;
+}
+
+// ═══════════════════════════════
+//  指标计算
+// ═══════════════════════════════
+
+// MACD(10, 20, 4-SMA)  ← 来自截图参数
+function calcMACD(closes,fast=10,slow=20,sigN=4){
+  const ef=ema(closes,fast), es=ema(closes,slow);
+  const ml=ef.map((v,i)=>v-es[i]);
+  // 信号线: SMA(MACD, 4)，从 slow-1 起
+  const mlValid=ml.slice(slow-1);
+  const sigRaw=sma(mlValid,sigN);              // 长度同 mlValid，前 sigN-1 为 null
+  const pad=slow-1+sigN-1;
+  const mlPad=Array(slow-1).fill(null).concat(mlValid);
+  const sigPad=Array(pad).fill(null).concat(sigRaw.slice(sigN-1));
+  const hist=mlPad.map((v,i)=>(v!==null&&sigPad[i]!==null)?v-sigPad[i]:null);
+  return{ml:mlPad,sig:sigPad,hist};
+}
+
+// RSI(14)
+function calcRSI(closes,n=14){
+  const r=Array(n).fill(null);
+  if(closes.length<=n)return r;
+  let ag=0,al=0;
+  for(let i=1;i<=n;i++){const d=closes[i]-closes[i-1];d>0?ag+=d:al-=d;}
+  ag/=n;al/=n;
+  r.push(al===0?100:100-100/(1+ag/al));
+  for(let i=n+1;i<closes.length;i++){
+    const d=closes[i]-closes[i-1];
+    ag=(ag*(n-1)+Math.max(0,d))/n;
+    al=(al*(n-1)+Math.max(0,-d))/n;
+    r.push(al===0?100:100-100/(1+ag/al));
+  }
+  return r;
+}
+
+// Bollinger Bands(20,2)
+function calcBB(closes,n=20,m=2){
+  const U=[],L=[],M=[],W=[];
+  for(let i=0;i<closes.length;i++){
+    if(i<n-1){U.push(null);L.push(null);M.push(null);W.push(null);continue;}
+    const sl=closes.slice(i-n+1,i+1);
+    const mn=sl.reduce((a,b)=>a+b,0)/n;
+    const sd=Math.sqrt(sl.reduce((a,b)=>a+(b-mn)**2,0)/n);
+    U.push(mn+m*sd);L.push(mn-m*sd);M.push(mn);W.push(sd*m*2/mn*100);
+  }
+  return{U,L,M,W};
+}
+
+// Stochastic(5, 3, 3)  ← %K=5, Smooth=3, %D=3
+function calcStoch(candles,kN=5,dN=3,smooth=3){
+  const H=candles.map(c=>c.high),Lo=candles.map(c=>c.low),C=candles.map(c=>c.close);
+  // Raw %K
+  const rawK=[];
+  for(let i=0;i<C.length;i++){
+    if(i<kN-1){rawK.push(null);continue;}
+    const hh=Math.max(...H.slice(i-kN+1,i+1));
+    const ll=Math.min(...Lo.slice(i-kN+1,i+1));
+    rawK.push(hh===ll?50:(C[i]-ll)/(hh-ll)*100);
+  }
+  const smK=smaSparse(rawK,smooth);   // Smoothed %K
+  const smD=smaSparse(smK,dN);        // %D
+  return{K:smK,D:smD};
+}
+
+// RVI(6)  ← 标准公式 + SMA(6)
+function calcRVI(candles,period=6){
+  const n=candles.length;
+  // 4-bar 三角加权原始值
+  const raw=[];
+  for(let i=0;i<n;i++){
+    if(i<3){raw.push(null);continue;}
+    const num=(candles[i].close-candles[i].open)
+             +2*(candles[i-1].close-candles[i-1].open)
+             +2*(candles[i-2].close-candles[i-2].open)
+             +(candles[i-3].close-candles[i-3].open);
+    const den=(candles[i].high-candles[i].low)
+             +2*(candles[i-1].high-candles[i-1].low)
+             +2*(candles[i-2].high-candles[i-2].low)
+             +(candles[i-3].high-candles[i-3].low);
+    raw.push(den===0?0:num/den);
+  }
+  // SMA(raw, period)
+  const rviLine=smaSparse(raw,period);
+  // Signal: 同样的三角加权
+  const sigArr=[];
+  for(let i=0;i<rviLine.length;i++){
+    if(i<3||rviLine[i]===null||rviLine[i-1]===null||rviLine[i-2]===null||rviLine[i-3]===null){
+      sigArr.push(null);continue;
+    }
+    sigArr.push((rviLine[i]+2*rviLine[i-1]+2*rviLine[i-2]+rviLine[i-3])/6);
+  }
+  return{rvi:rviLine,sig:sigArr};
+}
+
+// ═══════════════════════════════
+//  单时间段综合分析
+// ═══════════════════════════════
+function analyze(candles){
+  if(candles.length<60)return null;
+  const C=candles.map(c=>c.close);
+  const V=candles.map(c=>c.volume);
+  const n=C.length;
+
+  const{ml,sig:macdSig,hist}=calcMACD(C);
+  const rsiArr=calcRSI(C);
+  const bbObj=calcBB(C);
+  const e9=ema(C,9),e21=ema(C,21),e50=ema(C,50);
+  const stochObj=calcStoch(candles);
+  const rviObj=calcRVI(candles);
+
+  // 最后有效值
+  const vh=hist.filter(v=>v!==null);
+  const vm=ml.filter(v=>v!==null);
+  const vs=macdSig.filter(v=>v!==null);
+  const vr=rsiArr.filter(v=>v!==null);
+  const vw=bbObj.W.filter(v=>v!==null);
+  const vK=stochObj.K.filter(v=>v!==null);
+  const vD=stochObj.D.filter(v=>v!==null);
+  const vRVI=rviObj.rvi.filter(v=>v!==null);
+  const vRVIs=rviObj.sig.filter(v=>v!==null);
+
+  const lh=vh.at(-1)||0,ph=vh.at(-2)||0,p2h=vh.at(-3)||0;
+  const lm=vm.at(-1)||0,ls=vs.at(-1)||0;
+  const pm=vm.at(-2)||0,ps=vs.at(-2)||0;
+  const lRSI=vr.at(-1)||50;
+  const lW=vw.at(-1)||0;
+  const aW=vw.slice(-20).reduce((a,b)=>a+b,0)/Math.min(20,vw.length)||1;
+  const lK=vK.at(-1),pK=vK.at(-2),lD=vD.at(-1),pD=vD.at(-2);
+  const lRVI=vRVI.at(-1),lRVIs=vRVIs.at(-1);
+  const pRVI=vRVI.at(-2),pRVIs=vRVIs.at(-2);
+
+  const price=C[n-1],pe9=e9[n-1],pe21=e21[n-1],pe50=e50[n-1];
+  let emaSc=(price>pe9?1:0)+(pe9>pe21?1:0)+(pe21>pe50?1:0);
+
+  // Volume
+  const rv=V.slice(-21,-1);
+  const av=rv.reduce((a,b)=>a+b,0)/rv.length||1;
+  const volR=V[n-1]/av;
+
+  // BB 模式
+  const exp=lW>aW*1.15,sqz=lW<aW*0.75;
+  const hmUp=lh>ph&&ph>p2h,hmDn=lh<ph&&ph<p2h;
+  let mode;
+  if(sqz)mode='CONSOLIDATION';
+  else if(exp&&(hmUp||hmDn))mode='TRENDING';
+  else if((lRSI>72||lRSI<28)&&Math.abs(lh)<Math.abs(ph))mode='REVERSAL';
+  else mode='OSCILLATING';
+
+  // MACD 信号
+  const macdBull=lm>ls;
+  let macdSigName;
+  if(pm<=ps&&lm>ls)macdSigName='GOLDEN_CROSS';
+  else if(pm>=ps&&lm<ls)macdSigName='DEATH_CROSS';
+  else if(macdBull&&lh>ph)macdSigName='BULL_MOM';
+  else if(macdBull)macdSigName='BULL';
+  else if(!macdBull&&lh<ph)macdSigName='BEAR_MOM';
+  else macdSigName='BEAR';
+
+  // Stochastic 信号
+  const stochBull=lK!==null&&lD!==null&&lK>lD;
+  const stochOB=lK!==null&&lK>80;
+  const stochOS=lK!==null&&lK<20;
+  let stochSig='';
+  if(pK!==null&&pD!==null){
+    if(pK<=pD&&lK>lD)stochSig='金叉';
+    else if(pK>=pD&&lK<lD)stochSig='死叉';
+  }
+  if(!stochSig)stochSig=stochOB?'超买':stochOS?'超卖':stochBull?'多':'空';
+
+  // RVI 信号
+  const rviBull=lRVI!==null&&lRVIs!==null&&lRVI>lRVIs;
+  let rviSig='';
+  if(pRVI!==null&&pRVIs!==null){
+    if(pRVI<=pRVIs&&lRVI>lRVIs)rviSig='上穿';
+    else if(pRVI>=pRVIs&&lRVI<lRVIs)rviSig='下穿';
+  }
+  if(!rviSig)rviSig=rviBull?'多头':'空头';
+
+  // 三指标确认度 (MACD + Stoch + RVI)
+  const confArr=[macdBull,stochBull,rviBull];
+  const confCount=confArr.filter(Boolean).length;
+
+  // 背离检测（近15根）
+  const rc=C.slice(-15),rhv=hist.slice(-15).filter(v=>v!==null);
+  let div=null;
+  if(rhv.length>=5){
+    const phigh=Math.max(...rc),plow=Math.min(...rc);
+    const hhist=Math.max(...rhv),lhist=Math.min(...rhv);
+    if(price>=phigh*.985&&lh<hhist*.7&&hhist>0)div='BEAR_DIV';
+    else if(price<=plow*1.015&&lh>lhist*.7&&lhist<0)div='BULL_DIV';
+  }
+
+  // 主导周期动量分数
+  const mstr=Math.abs(lm-ls)/(Math.abs(lm)||.0001);
+  const momScore=mstr*(exp?1.5:1)*(volR>1.2?1.3:1)*Math.max(.1,Math.abs(emaSc-1.5)/1.5)*(confCount/3+.3);
+
+  return{
+    bull:macdBull,macdSigName,mode,div,momScore,
+    lRSI,lW,aW,emaSc,volR,lm,ls,lh,ph,
+    lK,lD,stochBull,stochOB,stochOS,stochSig,
+    lRVI,lRVIs,rviBull,rviSig,
+    confCount,
+    histSlice:hist.slice(-100),
+    mlSlice:ml.slice(-100),
+    sigSlice:macdSig.slice(-100),
+  };
+}
+
+// ═══════════════════════════════
+//  多时间段共振
+// ═══════════════════════════════
+function resonance(results){
+  const valid=TFS.filter(t=>results[t.id]);
+  if(!valid.length)return null;
+  const ids=valid.map(t=>t.id);
+  const bullN=ids.filter(id=>results[id].bull).length;
+  const bearN=ids.length-bullN;
+
+  let domTF=ids[0],maxS=-1;
+  ids.forEach(id=>{if(results[id].momScore>maxS){maxS=results[id].momScore;domTF=id;}});
+
+  let sig,conf;
+  const tot=ids.length;
+  if(bullN===tot){sig='STRONG BUY';conf=92;}
+  else if(bullN>=Math.ceil(tot*.7)){sig='BUY';conf=72;}
+  else if(bearN===tot){sig='STRONG SELL';conf=92;}
+  else if(bearN>=Math.ceil(tot*.7)){sig='SELL';conf=72;}
+  else{sig='NEUTRAL';conf=50;}
+
+  // 三指标全部共振加成
+  const tripleConf=ids.filter(id=>results[id].confCount===3).length;
+  if(tripleConf>=3)conf=Math.min(97,conf+8);
+  else if(tripleConf>=1)conf=Math.min(95,conf+3);
+
+  const mc={};
+  ids.forEach(id=>{const m=results[id].mode;mc[m]=(mc[m]||0)+1;});
+  const domMode=Object.keys(mc).reduce((a,b)=>mc[a]>mc[b]?a:b,'OSCILLATING');
+  const divs=ids.filter(id=>results[id].div).map(id=>({id,type:results[id].div}));
+
+  return{sig,conf,domTF,bullN,bearN,tot:ids.length,domMode,divs};
+}
+
+// ═══════════════════════════════
+//  数据获取（完整 OHLCV）
+// ═══════════════════════════════
+async function fetchBinance(sym,interval,limit=220){
+  const url=`https://api.binance.com/api/v3/klines?symbol=${sym.toUpperCase()}&interval=${interval}&limit=${limit}`;
+  const res=await fetch(url);
+  if(!res.ok)throw new Error(`Binance HTTP ${res.status}`);
+  const raw=await res.json();
+  if(raw.code)throw new Error(raw.msg||'Binance API 错误');
+  return raw.map(k=>({open:+k[1],high:+k[2],low:+k[3],close:+k[4],volume:+k[5]}));
+}
+
+
+// BingX TradFi — 美股/指数/贵金属，symbol 格式: AMD-USDT
+async function fetchBingX(sym,interval,limit=220){
+  const apiUrl=`https://open-api.bingx.com/openApi/swap/v2/quote/klines?symbol=${sym.toUpperCase()}&interval=${interval}&limit=${limit}`;
+  const url=`https://corsproxy.io/?`+encodeURIComponent(apiUrl);
+  const res=await fetch(url,{signal:AbortSignal.timeout(10000)});
+  if(!res.ok)throw new Error(`BingX HTTP ${res.status}`);
+  const d=await res.json();
+  if(d.code!==0)throw new Error(d.msg||'BingX API 错误');
+  if(!d.data||!d.data.length)throw new Error('BingX 返回空数据');
+  return d.data.map(k=>({
+    open:+k.open,high:+k.high,low:+k.low,close:+k.close,volume:+k.volume
+  }));
+}
+
+// ═══════════════════════════════
+//  图表
+// ═══════════════════════════════
+function drawChart(cid,tfId,res){
+  if(charts[tfId]){charts[tfId].destroy();delete charts[tfId];}
+  const cv=document.getElementById(cid);
+  if(!cv||!res)return;
+  const hist=res.histSlice;
+  const colors=hist.map(v=>v===null?'transparent':v>0?'rgba(63,185,80,.75)':'rgba(248,81,73,.75)');
+  charts[tfId]=new Chart(cv.getContext('2d'),{
+    type:'bar',
+    data:{
+      labels:hist.map(()=>''),
+      datasets:[
+        {data:hist,backgroundColor:colors,borderWidth:0,order:2},
+        {data:res.mlSlice,type:'line',borderColor:'#58a6ff',borderWidth:1.5,pointRadius:0,fill:false,order:1},
+        {data:res.sigSlice,type:'line',borderColor:'#f0883e',borderWidth:1.5,pointRadius:0,fill:false,order:0},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,animation:false,
+      plugins:{legend:{display:false},tooltip:{enabled:false}},
+      scales:{x:{display:false},y:{display:false}}
+    }
+  });
+}
+
+// ═══════════════════════════════
+//  UI 渲染
+// ═══════════════════════════════
+const MACD_MAP={
+  GOLDEN_CROSS:{l:'金叉 ↑',c:'gc'},
+  DEATH_CROSS:{l:'死叉 ↓',c:'dc'},
+  BULL_MOM:{l:'多头加速',c:'bm'},
+  BULL:{l:'多头',c:'bl'},
+  BEAR_MOM:{l:'空头加速',c:'sm'},
+  BEAR:{l:'空头',c:'br'},
+};
+const MODE_MAP={
+  TRENDING:{l:'趋势行情',c:'b-trend'},
+  CONSOLIDATION:{l:'整理蓄力',c:'b-cons'},
+  OSCILLATING:{l:'震荡行情',c:'b-osc'},
+  REVERSAL:{l:'潜在反转',c:'b-rev'},
+};
+const SIG_COLOR={'STRONG BUY':'c-sbuy','BUY':'c-buy','NEUTRAL':'c-neu','SELL':'c-sell','STRONG SELL':'c-ssell'};
+
+function rsiCol(v){return v>=70?'var(--red)':v<=30?'var(--green)':v>=60?'var(--orange)':'var(--text)';}
+function emaLbl(s){return['强空排列','偏空','偏多','强多排列'][s];}
+function emaCol(s){return s>=2?'var(--green)':s<=1?'var(--red)':'var(--yellow)';}
+function volCol(r){return r>1.5?'var(--green)':r<0.6?'var(--red)':'var(--muted)';}
+function stochCol(k,ob,os){return ob?'var(--red)':os?'var(--green)':k>50?'var(--green2)':'var(--red2)';}
+function rviCol(bull){return bull?'var(--green)':'var(--red)';}
+
+function renderPage(sym,results,res){
+  const sc=SIG_COLOR[res.sig]||'c-neu';
+  const mm=MODE_MAP[res.domMode]||{l:res.domMode,c:''};
+  const divSum=res.divs.map(d=>{
+    const tl=TFS.find(t=>t.id===d.id)?.label||d.id;
+    return tl+(d.type==='BEAR_DIV'?'顶背离':'底背离');
+  }).join('、');
+
+  let html=`
+  <div class="summary">
+    <div class="sc">
+      <div class="lbl">综合信号</div>
+      <div class="val ${sc}">${res.sig}</div>
+      <div class="sub">置信度 ${res.conf}% · ${sym.toUpperCase()}</div>
+    </div>
+    <div class="sc">
+      <div class="lbl">多空共振（${res.tot} 周期）</div>
+      <div class="dots">${TFS.map(t=>{
+        const r=results[t.id];
+        return`<div class="dot${r?(r.bull?' bull':' bear'):''}" title="${t.label}"></div>`;
+      }).join('')}</div>
+      <div class="sub" style="margin-top:8px">${res.bullN} 多 / ${res.bearN} 空</div>
+    </div>
+    <div class="sc">
+      <div class="lbl">主导时间段</div>
+      <div class="val" style="color:var(--orange);font-size:21px">${TFS.find(t=>t.id===res.domTF)?.label||res.domTF}</div>
+      <div class="sub">动量最强周期</div>
+    </div>
+    <div class="sc">
+      <div class="lbl">市场模式</div>
+      <div style="margin-top:5px"><span class="badge ${mm.c}" style="font-size:15px;padding:4px 13px">${mm.l}</span></div>
+      ${divSum?`<div class="sub" style="color:var(--red);margin-top:6px">⚠ ${divSum}</div>`:''}
+    </div>
+  </div>
+
+  <div class="tf-grid">
+    ${TFS.map(tf=>{
+      const r=results[tf.id];
+      if(!r)return`<div class="tfc"><div class="tfhd"><span class="tflbl">${tf.label}</span><span class="chip nu">无数据</span></div></div>`;
+      const dom=tf.id===res.domTF;
+      const ms=MACD_MAP[r.macdSigName]||{l:r.macdSigName,c:'nu'};
+      const bm=MODE_MAP[r.mode]||{l:r.mode,c:''};
+      const kDisp=r.lK!==null?r.lK.toFixed(1):'--';
+      const dDisp=r.lD!==null?r.lD.toFixed(1):'--';
+      const rviDisp=r.lRVI!==null?r.lRVI.toFixed(4):'--';
+      // Conf dots
+      const confDots=['MACD','Stoch','RVI'].map((lbl,i)=>{
+        const on=[r.bull,r.stochBull,r.rviBull][i];
+        return`<div class="conf-dot${on?' on':''}" title="${lbl}"></div>`;
+      }).join('');
+      return`
+        <div class="tfc ${r.bull?'bull-c':'bear-c'}">
+          <div class="tfhd">
+            <span class="tflbl">${tf.label}${dom?'<span class="domstar">★</span>':''}</span>
+            <span class="chip ${ms.c}">${ms.l}</span>
+          </div>
+          ${r.div?`<div class="div-alert ${r.div==='BEAR_DIV'?'da-bear':'da-bull'}">⚠ ${r.div==='BEAR_DIV'?'顶背离 — 注意回调':'底背离 — 潜在反弹'}</div>`:''}
+          <div class="chart-wrap"><canvas id="cv_${tf.id}"></canvas></div>
+          <div class="pstrip">MACD(10,20,4·SMA) · 蓝=MACD 橙=Signal</div>
+          <div class="mets">
+            <div class="met">
+              <span class="mk">RSI(14)</span>
+              <span class="mv" style="color:${rsiCol(r.lRSI)}">${r.lRSI.toFixed(1)}${r.lRSI>=70?' OB':r.lRSI<=30?' OS':''}</span>
+            </div>
+            <div class="met">
+              <span class="mk">EMA排列</span>
+              <span class="mv" style="color:${emaCol(r.emaSc)}">${emaLbl(r.emaSc)}</span>
+            </div>
+            <div class="met">
+              <span class="mk">Stoch %K/%D</span>
+              <span class="mv" style="color:${stochCol(r.lK,r.stochOB,r.stochOS)}">${kDisp}/${dDisp}</span>
+            </div>
+            <div class="met">
+              <span class="mk">Stoch信号</span>
+              <span class="mv" style="color:${r.stochBull?'var(--green)':'var(--red)'}'">${r.stochSig}</span>
+            </div>
+            <div class="met">
+              <span class="mk">RVI</span>
+              <span class="mv" style="color:${rviCol(r.rviBull)}">${rviDisp}</span>
+            </div>
+            <div class="met">
+              <span class="mk">RVI信号</span>
+              <span class="mv" style="color:${r.rviBull?'var(--green)':'var(--red)'}">${r.rviSig}</span>
+            </div>
+            <div class="met">
+              <span class="mk">BB模式</span>
+              <span class="mv"><span class="badge ${bm.c}" style="font-size:9px;padding:1px 5px">${bm.l}</span></span>
+            </div>
+            <div class="met">
+              <span class="mk">三指标确认</span>
+              <span class="mv"><div class="conf-bar">${confDots}</div></span>
+            </div>
+            <div class="met">
+              <span class="mk">成交量</span>
+              <span class="mv" style="color:${volCol(r.volR)}">${r.volR.toFixed(2)}x</span>
+            </div>
+          </div>
+        </div>`;
+    }).join('')}
+  </div>`;
+
+  document.getElementById('content').innerHTML=html;
+  setTimeout(()=>{TFS.forEach(tf=>{if(results[tf.id])drawChart(`cv_${tf.id}`,tf.id,results[tf.id]);});},30);
+}
+
+// ═══════════════════════════════
+//  主入口
+// ═══════════════════════════════
+async function run(){
+  const sym=document.getElementById('sym').value.trim();
+  if(!sym)return;
+  const btn=document.getElementById('runBtn');
+  btn.disabled=true;btn.textContent='分析中…';
+  document.getElementById('errArea').innerHTML='';
+  // 含 "-" 自动走 BingX TradFi，否则走 Binance
+  const isBingX=sym.includes('-');
+  const srcLabel=isBingX?'BingX TradFi':'Binance';
+  document.getElementById('content').innerHTML=`
+    <div class="ld"><div class="spin"></div>
+    <div style="color:var(--text)">拉取 ${sym.toUpperCase()} — 5 个时间段 OHLCV</div>
+    <p>数据来源：${srcLabel} · 计算 MACD(10,20,4) · Stoch(5,3,3) · RVI(6)…</p></div>`;
+
+  Object.values(charts).forEach(c=>c.destroy());
+  Object.keys(charts).forEach(k=>delete charts[k]);
+
+  const results={},errors=[];
+
+  if(isBingX){
+    // BingX TradFi：美股/指数/贵金属
+    await Promise.allSettled(TFS.map(async tf=>{
+      try{
+        const c=await fetchBingX(sym,tf.bingx);
+        results[tf.id]=analyze(c);
+      }catch(e){errors.push(`${tf.label}: ${e.message}`);results[tf.id]=null;}
+    }));
+  } else {
+    // Binance：加密货币 + 韩股 + SpaceX
+    await Promise.allSettled(TFS.map(async tf=>{
+      try{
+        const c=await fetchBinance(sym,tf.binance);
+        results[tf.id]=analyze(c);
+      }catch(e){errors.push(`${tf.label}: ${e.message}`);results[tf.id]=null;}
+    }));
+  }
+
+  btn.disabled=false;btn.textContent='▶ 分析';
+  const valid=Object.values(results).filter(Boolean);
+  if(!valid.length){
+    document.getElementById('errArea').innerHTML=`<div class="errbox">❌ 所有时间段获取失败。${errors[0]||''}</div>`;
+    document.getElementById('content').innerHTML='';return;
+  }
+  if(errors.length) document.getElementById('errArea').innerHTML=`<div class="warnbox">⚠ 部分失败：${errors.join(' | ')}</div>`;
+  const res=resonance(results);
+  if(res)renderPage(sym,results,res);
+}
+</script>
+</body>
+</html>
+                                                                                                                                                                                                                                                                                                                                                                                                                        
