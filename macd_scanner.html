@@ -520,29 +520,56 @@ async function fetchBinance(sym,interval,limit=220){
 }
 
 
+// ── Yahoo Finance 备用数据源（当 BingX 代理全部失败时使用）──
+const YAHOO_SYM={
+  'AMD-USDT':'AMD','MU-USDT':'MU','PLTR-USDT':'PLTR',
+  'SP500-USDT':'SPY','NDX-USDT':'QQQ',
+  'GOLD-USDT':'GC=F','SILVER-USDT':'SI=F',
+};
+const YAHOO_IV={'5m':'5m','15m':'15m','30m':'30m','1h':'60m','4h':'60m'};
+const YAHOO_RNG={'5m':'5d','15m':'5d','30m':'10d','1h':'60d','4h':'60d'};
+
+async function fetchYahoo(bSym,bInt,limit=220){
+  const ticker=YAHOO_SYM[bSym.toUpperCase()];
+  if(!ticker)throw new Error(`Yahoo 不支持 ${bSym}`);
+  const iv=YAHOO_IV[bInt]||'60m', rng=YAHOO_RNG[bInt]||'60d';
+  const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=${iv}&range=${rng}`;
+  const res=await fetch(url,{signal:AbortSignal.timeout(12000)});
+  if(!res.ok)throw new Error(`Yahoo HTTP ${res.status}`);
+  const data=await res.json();
+  const r=data?.chart?.result?.[0];
+  if(!r)throw new Error('Yahoo 返回空数据');
+  const ts=r.timestamp||[],q=r.indicators?.quote?.[0]||{};
+  const out=[];
+  for(let i=0;i<ts.length;i++){
+    if(q.open?.[i]==null||q.close?.[i]==null)continue;
+    out.push({open:q.open[i],high:q.high[i]||q.close[i],low:q.low[i]||q.close[i],
+               close:q.close[i],volume:q.volume?.[i]||0});
+  }
+  if(out.length<60)throw new Error('Yahoo 数据不足');
+  return out.slice(-limit);
+}
+
 // BingX TradFi — 美股/指数/贵金属，symbol 格式: AMD-USDT
+// 先尝试 BingX CORS 代理，全部失败则回落到 Yahoo Finance
 async function fetchBingX(sym,interval,limit=220){
   const apiUrl=`https://open-api.bingx.com/openApi/swap/v2/quote/klines?symbol=${sym.toUpperCase()}&interval=${interval}&limit=${limit}`;
-  // 依次尝试多个 CORS 代理
   const proxies=[
     `https://api.allorigins.win/raw?url=`+encodeURIComponent(apiUrl),
     `https://corsproxy.io/?`+encodeURIComponent(apiUrl),
     `https://thingproxy.freeboard.io/fetch/`+apiUrl,
   ];
-  let lastErr=new Error('所有代理失败');
   for(const url of proxies){
     try{
       const res=await fetch(url,{signal:AbortSignal.timeout(12000)});
-      if(!res.ok){lastErr=new Error(`BingX HTTP ${res.status}`);continue;}
+      if(!res.ok)continue;
       const d=await res.json();
-      if(d.code!==0){lastErr=new Error(d.msg||'BingX API 错误');continue;}
-      if(!d.data||!d.data.length){lastErr=new Error('BingX 返回空数据');continue;}
-      return d.data.map(k=>({
-        open:+k.open,high:+k.high,low:+k.low,close:+k.close,volume:+k.volume
-      }));
-    }catch(e){lastErr=e;}
+      if(d.code!==0||!d.data?.length)continue;
+      return d.data.map(k=>({open:+k.open,high:+k.high,low:+k.low,close:+k.close,volume:+k.volume}));
+    }catch(e){}
   }
-  throw lastErr;
+  // 回落到 Yahoo Finance
+  return fetchYahoo(sym,interval,limit);
 }
 
 // ═══════════════════════════════
