@@ -134,6 +134,8 @@ input[type=text]:focus{border-color:var(--blue);}
     </div>
     <input type="text" id="sym" value="BTCUSDT" placeholder="标的代码…" onkeydown="if(event.key==='Enter')run()">
     <button class="btn" id="runBtn" onclick="run()">▶ 分析</button>
+    <button class="btn" id="autoBtn" onclick="toggleAuto()" style="background:var(--border);color:var(--muted)">⟳ 自动刷新</button>
+    <span id="cdText" style="font-size:11px;color:var(--muted);min-width:40px;text-align:center;display:none"></span>
   </div>
 </div>
 
@@ -179,6 +181,38 @@ input[type=text]:focus{border-color:var(--blue);}
 // ═══════════════════════════════
 let assetType='crypto';
 const charts={};
+
+// 自动刷新
+let autoTimer=null, cdTimer=null, cdSec=0;
+const AUTO_INTERVAL=30;
+
+function toggleAuto(){
+  if(autoTimer){
+    clearInterval(autoTimer);clearInterval(cdTimer);
+    autoTimer=null;cdTimer=null;
+    const btn=document.getElementById('autoBtn');
+    btn.style.background='var(--border)';btn.style.color='var(--muted)';btn.textContent='⟳ 自动刷新';
+    document.getElementById('cdText').style.display='none';
+  } else {
+    run(); // 立即执行一次
+    startAutoRefresh();
+  }
+}
+
+function startAutoRefresh(){
+  const btn=document.getElementById('autoBtn');
+  btn.style.background='rgba(63,185,80,.25)';btn.style.color='var(--green)';btn.textContent='⟳ 开启中';
+  cdSec=AUTO_INTERVAL;
+  const cdEl=document.getElementById('cdText');
+  cdEl.style.display='inline';
+  cdEl.textContent=`${cdSec}s`;
+  cdTimer=setInterval(()=>{
+    cdSec--;
+    cdEl.textContent=`${cdSec}s`;
+    if(cdSec<=0)cdSec=AUTO_INTERVAL;
+  },1000);
+  autoTimer=setInterval(()=>{run();},AUTO_INTERVAL*1000);
+}
 
 const TFS=[
   {id:'5m', label:'5 分钟', binance:'5m', yahoo:'5m',  yRange:'5d'},
