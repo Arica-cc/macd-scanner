@@ -129,7 +129,7 @@ input[type=text]:focus{border-color:var(--blue);}
   <div class="logo">📊 波段侦测<sub>MACD(10,20,4) · Stoch(5,3,3) · RVI(6)</sub></div>
   <div class="ctrls">
     <input type="text" id="sym" value="BTCUSDT" placeholder="代码… BTCUSDT 或 AMD-USDT" onkeydown="if(event.key==='Enter')run()">
-    <input type="text" id="tdKey" placeholder="Twelve Data Key" title="twelvedata.com 免费 API Key" style="width:150px" oninput="localStorage.setItem('td_key',this.value)">
+    <input type="password" id="tdKey" placeholder="Twelve Data Key" title="twelvedata.com 免费 API Key" style="width:150px" oninput="localStorage.setItem('td_key',this.value)">
     <button class="btn" id="runBtn" onclick="run()">▶ 分析</button>
     <button class="btn" id="autoBtn" onclick="toggleAuto()" style="background:var(--border);color:var(--muted)">⟳ 自动刷新</button>
     <span id="cdText" style="font-size:11px;color:var(--muted);min-width:40px;text-align:center;display:none"></span>
@@ -164,7 +164,6 @@ input[type=text]:focus{border-color:var(--blue);}
   <div class="preset-grp">
     <span class="preset-grp-lbl">贵金属 · Yahoo</span>
     <button class="ps gold" onclick="pickPreset('GOLD-USDT')">🥇 黄金 XAUUSD</button>
-    <button class="ps silver" onclick="pickPreset('SILVER-USDT')">🥈 白银 XAGUSD</button>
   </div>
 </div>
 
@@ -533,7 +532,7 @@ const TD_SYM={
   'NDX-USDT':    'NDX',       // Nasdaq 100
   'SP500-USDT':  'SPX',       // 兼容旧名
   'GOLD-USDT':   'XAU/USD',   // 黄金 XAUUSD
-  'SILVER-USDT': 'XAG/USD',   // 白银 XAGUSD
+  'SILVER-USDT': 'SLV',       // 白银 ETF（XAG/USD 免费版不支持分钟级）
 };
 const TD_IV={'5m':'5min','15m':'15min','30m':'30min','1h':'1h','4h':'4h'};
 
@@ -544,18 +543,18 @@ async function fetchTD(sym,bInt,limit=220){
   if(!apiKey)throw new Error('请先输入 Twelve Data API Key');
   const interval=TD_IV[bInt]||'1h';
   const url=`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdSym)}&interval=${interval}&outputsize=${limit}&apikey=${apiKey}`;
-  const res=await fetch(url,{signal:AbortSignal.timeout(15000)});
+  let res=await fetch(url,{signal:AbortSignal.timeout(15000)});
+  if(res.status===429){
+    // 频率超限 → 等 12 秒后自动重试一次
+    await new Promise(r=>setTimeout(r,12000));
+    res=await fetch(url,{signal:AbortSignal.timeout(15000)});
+  }
   if(!res.ok)throw new Error(`Twelve Data HTTP ${res.status}`);
   const data=await res.json();
   if(data.status==='error')throw new Error('Twelve Data: '+data.message);
   if(!data.values?.length)throw new Error('Twelve Data 返回空数据');
-  // values 从新到旧，需反转
   return data.values.slice().reverse().map(v=>({
-    open:  +v.open,
-    high:  +v.high,
-    low:   +v.low,
-    close: +v.close,
-    volume:+(v.volume||0),
+    open:+v.open,high:+v.high,low:+v.low,close:+v.close,volume:+(v.volume||0),
   }));
 }
 
@@ -741,14 +740,23 @@ async function run(){
   Object.keys(charts).forEach(k=>delete charts[k]);
 
   const results={},errors=[];
-  await Promise.allSettled(TFS.map(async tf=>{
-    try{
-      const c=isTD
-        ? await fetchTD(sym,tf.id)
-        : await fetchBinance(sym,tf.binance);
-      results[tf.id]=analyze(c);
-    }catch(e){errors.push(`${tf.label}: ${e.message}`);results[tf.id]=null;}
-  }));
+  if(isTD){
+    // Twelve Data：顺序请求，避免触发 8次/分钟 频率限制
+    for(const tf of TFS){
+      try{
+        const c=await fetchTD(sym,tf.id);
+        results[tf.id]=analyze(c);
+      }catch(e){errors.push(`${tf.label}: ${e.message}`);results[tf.id]=null;}
+      await new Promise(r=>setTimeout(r,500)); // 每次间隔 0.5s
+    }
+  } else {
+    await Promise.allSettled(TFS.map(async tf=>{
+      try{
+        const c=await fetchBinance(sym,tf.binance);
+        results[tf.id]=analyze(c);
+      }catch(e){errors.push(`${tf.label}: ${e.message}`);results[tf.id]=null;}
+    }));
+  }
 
   btn.disabled=false;btn.textContent='▶ 分析';
   const valid=Object.values(results).filter(Boolean);
